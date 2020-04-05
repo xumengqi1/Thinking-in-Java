@@ -1,37 +1,20 @@
-## Welcome to GitHub Pages
+# 第21章 并发
 
-You can use the [editor on GitHub](https://github.com/xumengqi1/Thinking-in-Java/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
+## 21.1 并发的多面性
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+### 1.并发所解决的问题？
 
-### Markdown
+- 速度
+- 设计可管理性
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+### 2.Java的线程机制？
 
-```markdown
-Syntax highlighted code block
+Java的线程机制是抢占式的，这表示调度机制会周期性地中断线程，将上下文切换到另一个线程，从而为每个线程都提供时间片，使得每个线程都会分配到数量合理的时间去驱动它的任务。
 
-# Header 1
-## Header 2
-### Header 3
+## 21.2 基本的线程控制
 
-- Bulleted
-- List
+### 1.线程和进程的区别和联系？
 
-1. Numbered
-2. List
+一个线程就是在进程中的一个单一的顺序控制流，因此，单个进程可以拥有多个并发执行的任务。
 
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
-```
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/xumengqi1/Thinking-in-Java/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+### 2.用Runnable来定义任务
