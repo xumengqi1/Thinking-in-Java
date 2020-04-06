@@ -50,6 +50,7 @@ public class MyThread extends Thread {
         MyThread myThread1 = new MyThread();
         myThread1.start();
         //非顺序执行
+        //可以把start方法写到构造器里面，实现new Thread()便执行
     }
 }
 ```
@@ -212,7 +213,7 @@ public class FixedThreadPool {
 }
 ```
 
-### 8.优先级
+### 8.线程的优先级
 
 调度器倾向于让优先级最高的线程执行，优先级较低的线程仅仅是执行的频率较低；
 
@@ -223,5 +224,115 @@ public class FixedThreadPool {
 Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
 Thread.currentThread().setPriority(Thread.NORM_PRIORITY);
 Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
+```
+
+### 9.创建后台线程
+
+```java
+public class Daemons {
+    public static void main(String[] args) {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                //如果是一个后台线程，那么它创建的任何线程将被自动设置成后台线程
+                Thread thread1 = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                    }
+                });
+                thread1.start();
+                System.out.println("Inner：" + thread1.isDaemon());
+                //Out: true
+            }
+        });
+        //必须在线程启动之前调用setDaemon()方法
+        thread.setDaemon(true);
+        thread.start();
+        System.out.println("Outer: " + thread.isDaemon());
+        //Out: true
+        //当最后一个非后台线程终止时，后台线程会“突然”终止，finally子句也不会执行。
+    }
+}
+```
+
+### 10.加入一个线程
+
+```java
+public class Joining {
+    public static void main(String[] args) {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    TimeUnit.MILLISECONDS.sleep(1500);
+                    //0 Out: thread over; false; thread1 join over
+                    //1500 Out: thread interrupt; false; thread1 join over;
+                } catch (InterruptedException e) {
+                    System.out.println("thread interrupt");
+                    return;
+                }
+                System.out.println("thread over");
+            }
+        });
+        Thread thread1 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    thread.join();
+                    System.out.println(thread.isAlive());
+                    //thread1被挂起，直到thread线程结束才恢复
+                    System.out.println("thread1 join over");
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        thread.start();
+        thread.interrupt();
+        thread1.start();
+    }
+}
+```
+
+### 11.捕获异常
+
+```java
+public class ExceptionThread implements Runnable {
+    @Override
+    public void run() {
+        throw new RuntimeException();
+    }
+}
+public class MyUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
+    @Override
+    public void uncaughtException(Thread t, Throwable e) {
+        System.out.println("捕获到异常");
+    }
+}
+public class CaptureUncaughtException {
+    public static void main(String[] args) {
+        try {
+            //第一种：设置为默认的未捕获异常处理器
+            //Thread.setDefaultUncaughtExceptionHandler(new MyUncaughtExceptionHandler());
+            //第二种：修改Executor产生线程的方式
+            ExecutorService service = Executors.newCachedThreadPool(new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r);
+                    t.setUncaughtExceptionHandler(new MyUncaughtExceptionHandler());
+                    return t;
+                }
+            });
+            service.execute(new ExceptionThread());
+            //显示创建线程时
+            Thread thread = new Thread(new ExceptionThread());
+            thread.setUncaughtExceptionHandler(new MyUncaughtExceptionHandler());
+            thread.start();
+            //Out: 捕获到异常; 捕获到异常
+        } catch (Exception e) {
+            System.out.println("不会被打印：不能捕获从线程中逃逸的异常");
+        }
+    }
+}
 ```
 
