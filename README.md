@@ -21,10 +21,38 @@ Java的线程机制是抢占式的，这表示调度机制会周期性地中断�
 
 1. 继承Thread类
 2. 实现Runnable接口
-3. 实现Callable接口
-4. 使用线程池创建
+3. 使用线程池创建
+4. 实现Callable接口
 
 ### 3.创建线程：继承Thread类
+
+```java
+public class MyThread extends Thread {
+    private static int task = 0;
+    private final int id = task++;
+
+    @Override
+    public void run() {
+        int i = 1;
+        while (i <= 4) {
+            System.out.println("#" + id + " " + i);
+            i++;
+            Thread.yield();
+        }
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        MyThread myThread = new MyThread();
+        myThread.start();
+        //不能再次调用
+        //myThread.start();
+        MyThread myThread1 = new MyThread();
+        myThread1.start();
+        //非顺序执行
+    }
+}
+```
 
 
 
@@ -40,7 +68,7 @@ public class MyRunnable implements Runnable {
         while(i >= 1) {
             i--;
             System.out.println("#(" + id + ")" + System.currentTimeMillis());
-            //向线程调度器提出此时可以切换任务的建议
+            //让步：向线程调度器提出此时可以切换任务（具有相同优先级的其他线程）的建议
             Thread.yield();
         }
     }
@@ -68,11 +96,132 @@ public class MyRunnable implements Runnable {
 }
 ```
 
-### 5.创建线程：实现Callable接口
+### 5.创建线程：使用线程池创建
 
+```java
+public class CachedThreadPool {
+    public static void main(String[] args) {
+        //执行器允许管理异步任务的执行，而无须显式地管理线程的生命周期
+        ExecutorService service = Executors.newCachedThreadPool();
+        for (int i = 0; i < 5; i++) {
+            //CachedThreadPool将为每一个任务创建一个线程
+            service.execute(new MyRunnable());
+        }
+        //调用shutdown可以防止新任务被提交给这个Executor
+        //当前线程将继续运行在shutdown被调用之前提交的任务
+        service.shutdown();
+    }
+}
+```
 
+```java
+public class FixedThreadPool {
+    public static void main(String[] args) {
+        //FixedThreadPool使用有限的线程集来执行所提交的任务
+        ExecutorService service = Executors.newFixedThreadPool(2);
+        for (int i = 0; i < 5; i++) {
+            service.execute(new MyRunnable());
+        }
+        service.shutdown();
+        //Out: #0 #1 #2 #3 #4 #5 when nThreads = 1
+    }
+}
+```
 
-### 6.创建线程：使用线程池创建
+```java
+public class SingleThreadExecutor {
+    public static void main(String[] args) {
+        //SingleThreadExecutor相当于线程数量为1的FixedThreadPool
+        //适合长期存活的任务
+        ExecutorService service = Executors.newSingleThreadExecutor();
+        for (int i = 0; i < 5; i++) {
+            service.execute(new MyRunnable());
+        }
+        service.shutdown();
+        //Out: #0 #1 #2 #3 #4 #5
+    }
+}
+```
 
+### 6.创建线程：实现Callable接口
 
+```java
+public class TaskWithResult implements Callable<String> {
+    @Override
+    public String call() throws Exception {
+        return System.currentTimeMillis() % 2 == 0 ? "偶数" : "奇数";
+    }
+}
+```
+
+```java
+public class CallableDemo {
+    public static void main(String[] args) {
+        ExecutorService service = Executors.newCachedThreadPool();
+        Future<String> future = service.submit(new TaskWithResult());
+        try {
+            System.out.println(future.get());
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            return;
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } finally {
+            service.shutdown();
+        }
+        //Out: 偶数或奇数
+    }
+}
+```
+
+### 7.利用休眠使任务终止执行给定的时间
+
+调用Thread.sleep或TimeUnit.MILLISECONDS.sleep方法以休眠（均会抛出Interrupted Exception异常）
+
+```java
+public class MyRunnable implements Runnable {
+    private static int task = 0;
+    private final int id = task++;
+    @Override
+    public void run() {
+        int i = 3;
+        while(i >= 1) {
+            i--;
+            System.out.println("#(" + id + ")" + System.currentTimeMillis());
+            try {
+                //或者用：Thread.sleep(1000);
+                TimeUnit.MILLISECONDS.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            //向线程调度器提出此时可以切换任务的建议
+            Thread.yield();
+        }
+    }
+}
+
+public class FixedThreadPool {
+    public static void main(String[] args) {
+        ExecutorService service = Executors.newFixedThreadPool(1);
+        for (int i = 0; i < 5; i++) {
+            service.execute(new MyRunnable());
+        }
+        service.shutdown();
+        //Out: #0 #1 #2 #3 #4 #5 每隔一秒输出
+    }
+}
+```
+
+### 8.优先级
+
+调度器倾向于让优先级最高的线程执行，优先级较低的线程仅仅是执行的频率较低；
+
+所有线程都应该以默认的优先级运行，试图操纵优先级通常是一种错误。
+
+```java
+//在run中设置优先级
+Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
+Thread.currentThread().setPriority(Thread.NORM_PRIORITY);
+Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
+```
 
