@@ -458,3 +458,209 @@ public class LockTest {
 
 ### 5.原子性与易变性
 
+如果将一个域声明为volatile的，那么只要对这个域产生了写操作，那么所有的读操作就都可以看到这个修改。
+
+对基本类型的读取和赋值操作被认为是安全的原子操作，递增不是原子操作。
+
+```java
+public class VolatileTest {
+    static volatile int i = 0;
+    public static void main(String[] args) {
+        Runnable runnableLock = () -> {
+            int n = 0;
+            while (n < 100000) {
+                n++;
+                //递增不是原子操作
+                i++;
+            }
+            System.out.println(i);
+        };
+        new Thread(runnableLock).start();
+        new Thread(runnableLock).start();
+        //Out: ...; != 200000
+    }
+}
+```
+
+### 6.原子类
+
+```java
+public class AtomicIntegerTest {
+    private static AtomicInteger atomicInteger = new AtomicInteger(0);
+
+    public static void main(String[] args) {
+        Runnable runnableLock = new Runnable() {
+            @Override
+            public void run() {
+                int n = 0;
+                while (n < 100000) {
+                    n++;
+                    atomicInteger.incrementAndGet();
+                }
+                System.out.println(atomicInteger.get());
+            }
+        };
+        new Thread(runnableLock).start();
+        new Thread(runnableLock).start();
+        //Out: ...; == 200000
+    }
+}
+```
+
+### 7.临界区
+
+多个线程同时访问方法内部的部分代码而不是访问整个方法，分离出来的代码段被称为临界区（同步控制块）。
+
+可以使多个任务访问对象的时间性能得到显著提高。
+
+### 8.加锁方式总结
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        //以下均用MyRunnable.lock加锁，static
+        Thread thread = new Thread(new MyRunnable());
+        Thread thread1 = new Thread(new MyRunnable());
+        Thread thread2 = new Thread(new MyRunnable1());
+        Thread thread3 = new Thread(new MyRunnable1());
+        thread.start();
+        thread1.start();
+        thread2.start();
+        thread3.start();
+        //Out: ...; ...; ...; 400000
+        //以下均用MyRunnable的类对象加锁，class
+        Thread thread4 = new Thread(new MyRunnable2());
+        Thread thread5 = new Thread(new MyRunnable2());
+        thread4.start();
+        thread5.start();
+        //Out: ...; 200000;
+        //以下均用runnableLock加锁，this
+        Runnable runnableLock = new MyRunnable3();
+        Thread thread6 = new Thread(runnableLock);
+        Thread thread7 = new Thread(runnableLock);
+        thread6.start();
+        thread7.start();
+        //Out: ...; 200000;
+    }
+}
+
+public class MyRunnable implements Runnable {
+    public static int i = 0;
+    //必须用static才能加锁成功
+    final static Object lock = new Object();
+
+    @Override
+    public void run() {
+        int n = 0;
+        while (n < 100000) {
+            n++;
+            synchronized (lock) {
+                i++;
+            }
+        }
+        System.out.println("MyRunnable: " + i);
+    }
+}
+
+
+public class MyRunnable1 implements Runnable {
+    @Override
+    public void run() {
+        int n = 0;
+        while (n < 100000) {
+            n++;
+            synchronized (MyRunnable.lock) {
+                MyRunnable.i++;
+            }
+        }
+        System.out.println("MyRunnable1: " + MyRunnable.i);
+    }
+}
+
+public class MyRunnable2 implements Runnable {
+    private static int i = 0;
+    @Override
+    public void run() {
+        int n = 0;
+        while (n < 100000) {
+            n++;
+            increment();
+        }
+        System.out.println("MyRunnable2: " + i);
+    }
+
+    public synchronized static void increment() {
+        i++;
+    }
+}
+
+public class MyRunnable3 implements Runnable {
+    private static int i = 0;
+    @Override
+    public void run() {
+        int n = 0;
+        while (n < 100000) {
+            n++;
+            increment();
+        }
+        System.out.println("MyRunnable3: " + i);
+    }
+
+    public synchronized void increment() {
+        i++;
+    }
+}
+```
+
+### 9.线程本地存储
+
+```java
+public class ThreadLocalVariableHolder {
+    private static ThreadLocal<Integer> integerThreadLocal = new ThreadLocal<>() {
+        private Random random = new Random(47);
+        @Override
+        protected Integer initialValue() {
+            return random.nextInt(10000);
+        }
+    };
+
+    public static void increment() {
+        integerThreadLocal.set(integerThreadLocal.get() + 1);
+    }
+
+    public static int get() {
+        return integerThreadLocal.get();
+    }
+
+    public static void main(String[] args) {
+        ExecutorService executorService = Executors.newCachedThreadPool();
+        for (int i = 0; i < 4; i++) {
+            executorService.execute(new Accessor(i));
+        }
+        executorService.shutdown();
+        //Out: 每个不同的线程都创建不同的存储
+        //Accessor1: 556
+        //Accessor3: 6694
+        //Accessor2: 1862
+        //Accessor0: 9259
+    }
+}
+
+public class Accessor implements Runnable {
+    private final int id;
+
+    public Accessor(int id) {
+        this.id = id;
+    }
+    @Override
+    public void run() {
+        ThreadLocalVariableHolder.increment();
+        System.out.println("Accessor" + id + ": " + ThreadLocalVariableHolder.get());
+    }
+}
+```
+
+
+
+## 21.4 终结任务
+
