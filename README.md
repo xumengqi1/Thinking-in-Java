@@ -336,3 +336,125 @@ public class CaptureUncaughtException {
 }
 ```
 
+
+
+## 21.3 共享受限资源
+
+### 1.不正确的访问资源
+
+```java
+public class Test {
+    static int i = 0;
+    public static void main(String[] args) {
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                int n = 0;
+                while (n < 100000) {
+                    n++;
+                    //资源竞争
+                    i++;
+                }
+                System.out.println(i);
+            }
+        };
+        new Thread(runnable).start();
+        new Thread(runnable).start();
+        //Out: ...; != 200000
+    }
+}
+
+```
+
+```java
+public class Test {
+    static int i = 0;
+    static Object lock = new Object();
+    public static void main(String[] args) {
+        Runnable runnableLock = () -> {
+            int n = 0;
+            while (n < 100000) {
+                n++;
+                synchronized (lock) {
+                    i++;
+                }
+            }
+            System.out.println(i);
+        };
+        new Thread(runnableLock).start();
+        new Thread(runnableLock).start();
+        //Out: ...; == 200000
+    }
+}
+```
+
+### 2.解决资源竞争的方法有哪些？
+
+* 使用synchronized关键字（检查锁是否可用，获取锁，执行代码，释放锁）
+* 使用显式的Lock对象（显式创建，锁定和释放）
+
+### 3.加锁：使用synchronized关键字
+
+* 对象锁作用在非静态方法上，锁是当前实例对象 ，进入同步代码前要获得当前实例的锁
+* 类锁作用在静态方法上，锁是当前类的class对象 ，进入同步代码前要获得当前类Class对象的锁
+* 作用在代码块上，锁是括号里面的对象，对给定对象加锁，进入同步代码库前要获得给定对象的锁
+
+```java
+public class SynchronizedTest {
+    static int i = 0;
+    static Object lock = new Object();
+    public static void main(String[] args) {
+        Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                synchronized (lock) {
+                    //给定对象锁
+                    i++;
+                }
+            }
+            public synchronized void addOne() {
+                //对象锁
+                i++;
+            }
+        };
+    }
+    public static synchronized void addOne() {
+        //类锁
+        i++;
+    }
+}
+```
+
+### 4.加锁：使用显式的Lock对象
+
+```java
+public class LockTest {
+    static int i = 0;
+    static Lock lock = new ReentrantLock();
+    public static void main(String[] args) {
+        Runnable runnableLock = () -> {
+            int n = 0;
+            while (n < 100000) {
+                n++;
+                lock.lock();
+                try {
+                    i++;
+                    //如果有return语句，必须在try子句中出现，以确保unlock()不会过早发生
+                } finally {
+                    //使用synchronized时，某些事物失败了，那么就会抛出一个异常
+                    //而有显式的Lock对象可以使用finally子句将系统维护在正确的状态
+                    //通常只有在解决特殊问题时，才使用显式的Lock对象
+                    lock.unlock();
+                }
+            }
+            System.out.println(i);
+        };
+        new Thread(runnableLock).start();
+        new Thread(runnableLock).start();
+        //Out: ...; 200000
+    }
+}
+```
+
+### 5.原子性与易变性
+
