@@ -680,5 +680,133 @@ public class Accessor implements Runnable {
 
 ### 3.如何中断
 
+如果一个线程已经被阻塞，或者试图执行一个阻塞操作，那么这个线程的中断状态将抛出Interrupted Exception
 
+```java
+public class InnerRunnable implements Runnable {
+    @Override
+    public void run() {
+        try {
+            Thread.sleep(1000);
+            System.out.println(Thread.currentThread().getName());
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
+        }
+    }
+}
+
+public class Interrupted {
+    public static void main(String[] args) {
+        Thread t = new Thread(new InnerRunnable());
+        t.interrupt();
+        ExecutorService service = Executors.newCachedThreadPool();
+        service.execute(new InnerRunnable());
+        service.shutdownNow();
+        //中断单个任务
+        ExecutorService service1 = Executors.newCachedThreadPool();
+        Future<?> future = service1.submit(new InnerRunnable());
+        future.cancel(true);
+        //用来关闭
+        service1.shutdown();
+    }
+}
+```
+
+
+
+## 21.5 线程之间的协作
+
+### 1.示例题：交替打印one和two？
+
+```java
+public class PrintOneAndTwo {
+    private boolean isOne = true;
+    private boolean isTwo = false;
+
+    public synchronized void waitForPrintingOne() throws InterruptedException {
+        while (isTwo && !isOne) {
+            wait();
+        }
+    }
+
+    public synchronized void printOne() {
+        System.out.println("one");
+        isOne = false;
+        isTwo = true;
+        notifyAll();
+    }
+
+    public synchronized void waitForPrintingTwo() throws InterruptedException {
+        while (isOne && !isTwo) {
+            wait();
+        }
+    }
+
+    public synchronized void printTwo() {
+        System.out.println("two");
+        isOne = true;
+        isTwo = false;
+        notifyAll();
+    }
+}
+
+public class OneAndTwo {
+    public static void main(String[] args) throws InterruptedException {
+        PrintOneAndTwo printOneAndTwo = new PrintOneAndTwo();
+        Runnable runnableOne = () -> {
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    printOneAndTwo.waitForPrintingOne();
+                    printOneAndTwo.printOne();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        };
+        Runnable runnableTwo = () -> {
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    printOneAndTwo.waitForPrintingTwo();
+                    printOneAndTwo.printTwo();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        };
+        ExecutorService executorService = Executors.newCachedThreadPool();
+        executorService.execute(runnableOne);
+        executorService.execute(runnableTwo);
+        TimeUnit.MILLISECONDS.sleep(2000);
+        //终止所有线程
+        executorService.shutdownNow();
+        //关闭
+        executorService.shutdown();
+    }
+}
+```
+
+### 3.错失的信号
+
+```java
+//有缺陷的写法
+while (someCondition) {
+	synchronized (shareMonitor) {
+		shareMonitor.wait();
+	}
+}
+//正确的写法
+synchronized (shareMonitor) {
+	while (someCondition) {
+		shareMonitor.wait();
+	}
+}
+```
+
+### 4.notify()和notifyAll()
+
+1. 使用notify()而不是notifyAll()是一种优化；使用notify()时，在众多等待同一个锁的任务中只有一个会被唤醒
+2. 如果希望使用notify()，就必须保证被唤醒的是恰当的任务，所有任务必须等待相同的条件
+3. 当notifyAll()因某个特定锁而被调用时，只有等待这个锁的任务才会被唤醒
+
+### 5.使用同步队列来解决任务协作的问题
 
